@@ -1,4 +1,4 @@
-name: Cloud VM Windows 7 QCOW2
+name: Cloud VM Windows 7 QCOW2 (FIXED)
 on: 
   workflow_dispatch:
 
@@ -9,36 +9,37 @@ jobs:
       - name: 1. Install QEMU and noVNC
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils websockify novnc
+          # Added python3-numpy to fix the 'client.conf' and performance issues
+          sudo apt-get install -y qemu-system-x86 qemu-utils websockify novnc python3-numpy
           
       - name: 2. Download Image
         run: |
-          # Note: Using your specific .qcow2 link
-          # If this fails, the link has expired and you need a new one
+          # Downloading your specific Win 7 QCOW2 link
+          # NOTE: If this step fails or is very fast, the Mediafire link has expired.
           curl -L -o win.qcow2 "https://download2330.mediafire.com/7fvbld7ppb5g6pzhJvsZfbivKOBvcX_EXL6t_bbFJDp6MjHoO54IesozHc2mFf3u9CadBDgvZdqwD9oJljih-xUHL5HSGpdx_qB8vfzueEeNWkiN907H88KOrdhFKJpl7G7n77L-0h1bNnj2wtEkt2h-lbDD1jYgcnXUDXEEkLGOrg/qltz6n680wwtz3r/w7.qcow2"
           
       - name: 3. Setup Tunnel
         run: |
           wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared-linux-amd64.deb
+          # Tunnel points to the noVNC web port (6080)
           cloudflared tunnel --url http://localhost:6080 > tunnel.log 2>&1 &
           
-      - name: 4. Boot VM
+      - name: 4. Boot VM and Launch Web Proxy
         run: |
-          # A. Start QEMU with QCOW2 settings
-          # Using 4GB RAM and 2 Cores
+          # A. Start QEMU (Using QCOW2 format and 4GB RAM)
           qemu-system-x86_64 -m 4G -smp 2 -cpu core2duo \
           -drive file=win.qcow2,format=qcow2 \
           -net nic,model=virtio -net user \
           -vga std -display vnc=:0 &
           
-          # B. Start the Web Viewer (noVNC)
-          /usr/share/novnc/utils/launch.sh --vnc localhost:5900 --listen 6080 &
+          # B. Start noVNC using the CORRECT binary path for Ubuntu
+          /usr/bin/novnc_proxy --vnc localhost:5900 --listen 6080 &
           
           # C. Output the Link
           echo "============================================"
           echo "WAITING FOR CLOUDFLARE LINK..."
-          sleep 20
+          sleep 30
           grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel.log
           echo "============================================"
           
