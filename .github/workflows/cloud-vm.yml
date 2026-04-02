@@ -1,0 +1,42 @@
+name: Run Windows 8 VDI
+on: workflow_dispatch
+
+jobs:
+  run-vm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install QEMU and Networking Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils websockify novnc
+          
+      - name: Download VDI from Archive.org
+        run: |
+          # The -L follows redirects, -o names the output file
+          curl -L -o win8.vdi "https://archive.org/download/windows-8-startup/Windows%208%20Pro.vdi"
+          
+      - name: Install Cloudflare Tunnel
+        run: |
+          wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb
+          # Start tunnel in background and log the URL
+          cloudflared tunnel --url http://localhost:6080 > tunnel.log 2>&1 &
+          
+      - name: Launch VM and noVNC
+        run: |
+          # 1. Start QEMU 
+          # Note: Windows 8 needs at least 2GB RAM and 'core2duo' or 'host' cpu type to boot well
+          qemu-system-x86_64 -m 3G -smp 2 -cpu core2duo \
+          -drive file=win8.vdi,format=vdi \
+          -vga virtio -display vnc=:0 &
+          
+          # 2. Start noVNC bridge
+          /usr/share/novnc/utils/launch.sh --vnc localhost:5900 --listen 6080 &
+          
+          # 3. Output the Cloudflare URL so you can click it
+          echo "WAITING FOR TUNNEL TO INITIALIZE..."
+          sleep 10
+          grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel.log
+          
+          # 4. Keep alive for 6 hours
+          sleep 21600
